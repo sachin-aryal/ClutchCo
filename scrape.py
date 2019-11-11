@@ -1,11 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 import time
-from urllib.parse import urlencode, urlparse, urlunparse, parse_qs
-
-
-# output = open("output.csv", "w")
-# output.write("Company Name, Category, Contact\n")
+import threading
 
 
 def get_content(url):
@@ -17,28 +13,11 @@ def get_content(url):
         print("Error occurred: {}".format(str(ex)))
 
 
-def get_contact_us_link(link):
-    content = get_content(link)
-    bs = BeautifulSoup(content, parser="lxml", features="lxml")
-    contact_link = link
-    try:
-        a_tags = bs.findAll("a")
-        for a in a_tags:
-            text = str(a.text).lower()
-            if text.startswith("contact"):
-                contact_link = a["href"]
-                if len(contact_link) < len(link):
-                    link = link[:link.find('?')]
-                    contact_link = link+""+contact_link
-                break
-    except:
-        pass
-    return contact_link
-
-
 def get_brand_data(category, link):
     page = 0
     print("Fetching Data for {}".format(category))
+    output = open(category+".csv", "w")
+    output.write("Company Name, Category, Contact\n")
     while True:
         url = "https://clutch.co/{}?page={}".format(link, page)
         bs = BeautifulSoup(get_content(url=url), parser="lxml", features="lxml")
@@ -49,10 +28,13 @@ def get_brand_data(category, link):
             company_name = company.find("h3", {"class": "company-name"})
             company_name = company_name.text
             company_link = company.find("li", {"class": "website-link"})
-            company_link = company_link.find("a")
-            company_link = company_link["href"]
+            try:
+                company_link = company_link.find("a")
+                company_link = company_link["href"]
+            except AttributeError:
+                company_link = ""
             if len(company_name.strip()) > 1:
-                output.write(company_name+", "+category+", "+get_contact_us_link(company_link))
+                output.write(company_name+", "+category+", "+company_link)
         if not_found:
             break
         page += 1
@@ -81,10 +63,12 @@ def get_brands():
                 pass
     return links
 
-# brands = get_brands()
-# for category, link in brands.items():
-#     get_brand_data(category, link)
-#     break
-# output.close()
+brands = get_brands()
+all_threads = []
+for category, link in brands.items():
+    thread = threading.Thread(target=get_brand_data, args=(category, link, ))
+    thread.start()
+    all_threads.append(thread)
 
-# print(get_contact_us_link("https://www.venthio.com/?utm_source=clutch&utm_medium=referral&utm_campaign=ad-agencies"))
+for th in all_threads:
+  th.join()
